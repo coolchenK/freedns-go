@@ -227,11 +227,12 @@ func resolve(req *dns.Msg, upstream string, net string) (*dns.Msg, error) {
 }
 
 func (s *Server) maybePolluted(res *dns.Msg) bool {
-	if containA(res) {
-		china := containChinaIP(res)
+    b, ip := getA(res)
+    if b {
+		china := chinaip.IsChinaIP(ip)
 		s.chinaDom.Set(res.Question[0].Name, china)
 		return !china
-	}
+    }
 
 	china, ok := s.chinaDom.Get(res.Question[0].Name)
 	if ok {
@@ -240,40 +241,16 @@ func (s *Server) maybePolluted(res *dns.Msg) bool {
 	return false
 }
 
-func containA(res *dns.Msg) bool {
-	var rrs []dns.RR
-
-	rrs = append(rrs, res.Answer...)
-	rrs = append(rrs, res.Ns...)
-	rrs = append(rrs, res.Extra...)
-
-	for i := 0; i < len(rrs); i++ {
-		_, ok := rrs[i].(*dns.A)
-		if ok {
-			return true
-		}
-	}
-	return false
-}
-
-// containChinaIP judge answers whether contains IP belong to China.
-func containChinaIP(res *dns.Msg) bool {
-	var rrs []dns.RR
-
-	rrs = append(rrs, res.Answer...)
-	rrs = append(rrs, res.Ns...)
-	rrs = append(rrs, res.Extra...)
-
-	for i := 0; i < len(rrs); i++ {
-		rr, ok := rrs[i].(*dns.A)
-		if ok {
-			ip := rr.A.String()
-			if chinaip.IsChinaIP(ip) {
-				return true
+func getA(res *dns.Msg) (bool, string) {
+	if res.Rcode == dns.RcodeSuccess {
+		for _, a := range res.Answer {
+			switch t := a.(type) {
+			case *dns.A:
+				return true, t.A.String()
 			}
 		}
 	}
-	return false
+	return false,""
 }
 
 func genCacheKey(r *dns.Msg, net string) string {
